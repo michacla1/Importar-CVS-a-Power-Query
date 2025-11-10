@@ -1,0 +1,68 @@
+// Nombre de esta consulta => fxLoadCsvFlexible
+(fileBinary as binary) as table =>
+let
+    // Tomamos un trozo inicial para detectar delimitador
+    FirstChunk   = Binary.Range(fileBinary, 0, 65536),
+    Lines        = Lines.FromBinary(FirstChunk, null, null, 65001),
+    HeaderSample = List.FirstN(Lines, 2),
+
+    // Candidatos de delimitador: coma, ;, |, tab
+    Candidates   = {",",";","|", Character.FromNumber(9)},
+    Counts       = List.Transform(
+                     Candidates,
+                     (d)=> List.Sum(List.Transform(HeaderSample, each List.Count(Text.PositionOf(_, d, Occurrence.All))))
+                   ),
+    BestIx       = List.PositionOf(Counts, List.Max(Counts)),
+    Delim        = Candidates{BestIx},
+
+    // Leer CSV con ese delimitador
+    CsvRaw       = Csv.Document(
+                      fileBinary,
+                      [Delimiter=Delim, Encoding=65001, QuoteStyle=QuoteStyle.Csv]
+                   ),
+
+    // Promover encabezados si aplica
+    WithHeaders  = Table.PromoteHeaders(CsvRaw, [PromoteAllScalars=true]),
+
+    // (Opcional) Tipar como texto para evitar errores por esquemas distintos
+    AsText       = Table.TransformColumnTypes(
+                      WithHeaders,
+                      List.Transform(Table.ColumnNames(WithHeaders), each {_, type text}),
+                      "en-US"
+                   )
+in
+    AsText
+
+(fileBinary as binary) as table =>
+let
+    // Tomamos un trozo inicial para detectar delimitador
+    FirstChunk   = Binary.Range(fileBinary, 0, 65536),         // <- CAMBIAR SOLO si necesitas leer un bloque más grande/pequeño para detectar el delimitador.
+    Lines        = Lines.FromBinary(FirstChunk, null, null, 65001), // <- CAMBIAR si tu encoding NO es UTF-8 (65001). Ej.: 1252, 850, etc.
+    HeaderSample = List.FirstN(Lines, 2),                       // <- CAMBIAR si quieres usar más/menos líneas para detectar el delimitador.
+
+    // Candidatos de delimitador: coma, ;, |, tab
+    Candidates   = {",",";","|", Character.FromNumber(9)},     // <- CAMBIAR (agregar/quitar) si usas otros delimitadores (p. ej. "~", "^").
+    Counts       = List.Transform(
+                     Candidates,
+                     (d)=> List.Sum(List.Transform(HeaderSample, each List.Count(Text.PositionOf(_, d, Occurrence.All))))
+                   ),
+    BestIx       = List.PositionOf(Counts, List.Max(Counts)),   // <- NO CAMBIAR (lógica para elegir el mejor delimitador).
+    Delim        = Candidates{BestIx},                          // <- NO CAMBIAR (toma el delimitador elegido).
+
+    // Leer CSV con ese delimitador
+    CsvRaw       = Csv.Document(
+                      fileBinary,
+                      [Delimiter=Delim, Encoding=65001, QuoteStyle=QuoteStyle.Csv] // <- CAMBIAR Encoding si no es UTF-8. Cambiar QuoteStyle solo si tu archivo usa otro estilo.
+                   ),
+
+    // Promover encabezados si aplica
+    WithHeaders  = Table.PromoteHeaders(CsvRaw, [PromoteAllScalars=true]), // <- CAMBIAR si NO quieres promover encabezados automáticamente (o quita este paso).
+
+    // (Opcional) Tipar como texto para evitar errores por esquemas distintos
+    AsText       = Table.TransformColumnTypes(
+                      WithHeaders,
+                      List.Transform(Table.ColumnNames(WithHeaders), each {_, type text}), // <- CAMBIAR tipos si quieres tipado específico (number, date, etc.).
+                      "en-US"                                               // <- CAMBIAR cultura si necesitas otra (p. ej. "es-PE", "es-ES").
+                   )
+in
+    AsText
