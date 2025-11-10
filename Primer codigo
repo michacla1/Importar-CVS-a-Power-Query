@@ -1,4 +1,4 @@
-
+//
 (fileBinary as binary) as table =>
 let
     // Tomamos un trozo inicial para detectar delimitador
