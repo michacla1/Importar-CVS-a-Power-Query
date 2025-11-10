@@ -1,0 +1,34 @@
+// Nombre de esta consulta => fxLoadCsvFlexible
+(fileBinary as binary) as table =>
+let
+    // Tomamos un trozo inicial para detectar delimitador
+    FirstChunk   = Binary.Range(fileBinary, 0, 65536),
+    Lines        = Lines.FromBinary(FirstChunk, null, null, 65001),
+    HeaderSample = List.FirstN(Lines, 2),
+
+    // Candidatos de delimitador: coma, ;, |, tab
+    Candidates   = {",",";","|", Character.FromNumber(9)},
+    Counts       = List.Transform(
+                     Candidates,
+                     (d)=> List.Sum(List.Transform(HeaderSample, each List.Count(Text.PositionOf(_, d, Occurrence.All))))
+                   ),
+    BestIx       = List.PositionOf(Counts, List.Max(Counts)),
+    Delim        = Candidates{BestIx},
+
+    // Leer CSV con ese delimitador
+    CsvRaw       = Csv.Document(
+                      fileBinary,
+                      [Delimiter=Delim, Encoding=65001, QuoteStyle=QuoteStyle.Csv]
+                   ),
+
+    // Promover encabezados si aplica
+    WithHeaders  = Table.PromoteHeaders(CsvRaw, [PromoteAllScalars=true]),
+
+    // (Opcional) Tipar como texto para evitar errores por esquemas distintos
+    AsText       = Table.TransformColumnTypes(
+                      WithHeaders,
+                      List.Transform(Table.ColumnNames(WithHeaders), each {_, type text}),
+                      "en-US"
+                   )
+in
+    AsText
